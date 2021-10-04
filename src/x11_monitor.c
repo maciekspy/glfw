@@ -116,7 +116,7 @@ void _glfwPollMonitorsX11(void)
         disconnectedCount = _glfw.monitorCount;
         if (disconnectedCount)
         {
-            disconnected = calloc(_glfw.monitorCount, sizeof(_GLFWmonitor*));
+            disconnected = _glfw_calloc(_glfw.monitorCount, sizeof(_GLFWmonitor*));
             memcpy(disconnected,
                    _glfw.monitors,
                    _glfw.monitorCount * sizeof(_GLFWmonitor*));
@@ -164,7 +164,7 @@ void _glfwPollMonitorsX11(void)
             if (widthMM <= 0 || heightMM <= 0)
             {
                 // HACK: If RandR does not provide a physical size, assume the
-                //       X11 default 96 DPI and calcuate from the CRTC viewport
+                //       X11 default 96 DPI and calculate from the CRTC viewport
                 // NOTE: These members are affected by rotation, unlike the mode
                 //       info and output info members
                 widthMM  = (int) (ci->width * 25.4f / 96.f);
@@ -209,7 +209,7 @@ void _glfwPollMonitorsX11(void)
                 _glfwInputMonitor(disconnected[i], GLFW_DISCONNECTED, 0);
         }
 
-        free(disconnected);
+        _glfw_free(disconnected);
     }
     else
     {
@@ -322,12 +322,16 @@ void _glfwPlatformGetMonitorPos(_GLFWmonitor* monitor, int* xpos, int* ypos)
             XRRGetScreenResourcesCurrent(_glfw.x11.display, _glfw.x11.root);
         XRRCrtcInfo* ci = XRRGetCrtcInfo(_glfw.x11.display, sr, monitor->x11.crtc);
 
-        if (xpos)
-            *xpos = ci->x;
-        if (ypos)
-            *ypos = ci->y;
+        if (ci)
+        {
+            if (xpos)
+                *xpos = ci->x;
+            if (ypos)
+                *ypos = ci->y;
 
-        XRRFreeCrtcInfo(ci);
+            XRRFreeCrtcInfo(ci);
+        }
+
         XRRFreeScreenResources(sr);
     }
 }
@@ -446,7 +450,7 @@ GLFWvidmode* _glfwPlatformGetVideoModes(_GLFWmonitor* monitor, int* count)
         XRRCrtcInfo* ci = XRRGetCrtcInfo(_glfw.x11.display, sr, monitor->x11.crtc);
         XRROutputInfo* oi = XRRGetOutputInfo(_glfw.x11.display, sr, monitor->x11.output);
 
-        result = calloc(oi->nmode, sizeof(GLFWvidmode));
+        result = _glfw_calloc(oi->nmode, sizeof(GLFWvidmode));
 
         for (int i = 0;  i < oi->nmode;  i++)
         {
@@ -478,7 +482,7 @@ GLFWvidmode* _glfwPlatformGetVideoModes(_GLFWmonitor* monitor, int* count)
     else
     {
         *count = 1;
-        result = calloc(1, sizeof(GLFWvidmode));
+        result = _glfw_calloc(1, sizeof(GLFWvidmode));
         _glfwPlatformGetVideoMode(monitor, result);
     }
 
@@ -493,9 +497,15 @@ void _glfwPlatformGetVideoMode(_GLFWmonitor* monitor, GLFWvidmode* mode)
             XRRGetScreenResourcesCurrent(_glfw.x11.display, _glfw.x11.root);
         XRRCrtcInfo* ci = XRRGetCrtcInfo(_glfw.x11.display, sr, monitor->x11.crtc);
 
-        *mode = vidmodeFromModeInfo(getModeInfo(sr, ci->mode), ci);
+        if (ci)
+        {
+            const XRRModeInfo* mi = getModeInfo(sr, ci->mode);
+            if (mi)  // mi can be NULL if the monitor has been disconnected
+                *mode = vidmodeFromModeInfo(mi, ci);
 
-        XRRFreeCrtcInfo(ci);
+            XRRFreeCrtcInfo(ci);
+        }
+
         XRRFreeScreenResources(sr);
     }
     else
